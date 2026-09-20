@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../app/routes.dart';
 import '../../models/user_model.dart';
 import '../../models/task_model.dart';
 import '../../services/project_service.dart';
@@ -23,15 +22,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _taskService = TaskService();
   final _reportService = ReportService();
 
-  UserModel _user = UserModel(
-    id: 'u1',
-    name: 'Dra. Elena Vargas',
-    email: 'elena.vargas@universidad.edu',
-    institution: 'Universidad Nacional de Investigación',
-    role: UserRole.principalInvestigator,
-    projectIds: [],
-    createdAt: DateTime(2020, 3, 15),
-  );
+  late UserModel _user;
 
   @override
   void initState() {
@@ -47,17 +38,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _goToEdit() async {
-    final result = await Navigator.pushNamed(
-      context,
-      AppRoutes.editProfile,
-      arguments: _user,
-    );
-    if (result is UserModel && mounted) {
-      setState(() => _user = result);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final myTasks = _taskService.getTasksByAssignee(_user.id);
@@ -67,13 +47,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return AppScaffold(
       title: 'Perfil',
       currentIndex: 8,
-      actions: [
-        IconButton(
-          onPressed: _goToEdit,
-          icon: const Icon(Icons.edit_outlined),
-          tooltip: 'Editar perfil',
-        ),
-      ],
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppDimens.spaceLg),
         child: Column(

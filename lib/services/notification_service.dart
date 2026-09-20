@@ -1,58 +1,24 @@
+import 'dart:convert';
 import '../models/notification_model.dart';
+import 'api_client.dart';
 
 class NotificationService {
-  static final NotificationService _instance = NotificationService._internal();
-  factory NotificationService() => _instance;
-  NotificationService._internal();
+  static const String _resource = '/notifications';
 
-  final List<NotificationModel> _cache = [];
+  List<NotificationModel> _cache = [];
   bool _loaded = false;
 
-  void _seed() {
+  Future<void> _ensureLoaded() async {
     if (_loaded) return;
-    _cache.addAll([
-      NotificationModel(
-        id: 'n1',
-        type: NotificationType.taskAssigned,
-        title: 'Nueva tarea asignada',
-        body: 'Se te ha asignado "Recolectar muestras Zona 2".',
-        projectId: 'p1',
-        isRead: false,
-        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-      ),
-      NotificationModel(
-        id: 'n2',
-        type: NotificationType.deadlineReminder,
-        title: 'Fecha límite próxima',
-        body: 'La tarea "Encuestas de campo" vence en 2 días.',
-        projectId: 'p3',
-        isRead: false,
-        createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-      ),
-      NotificationModel(
-        id: 'n3',
-        type: NotificationType.projectUpdate,
-        title: 'Proyecto actualizado',
-        body: 'El proyecto "Estudio de Biodiversidad" ha alcanzado 45% de progreso.',
-        projectId: 'p1',
-        isRead: true,
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-      NotificationModel(
-        id: 'n4',
-        type: NotificationType.messageReceived,
-        title: 'Nuevo mensaje',
-        body: 'Carlos ha enviado un mensaje en el chat del proyecto.',
-        projectId: 'p1',
-        isRead: true,
-        createdAt: DateTime.now().subtract(const Duration(days: 2)),
-      ),
-    ]);
+    final res = await ApiClient.get(_resource);
+    if (res.statusCode == 200) {
+      final list = jsonDecode(res.body) as List;
+      _cache = list.map((j) => _fromApi(j as Map<String, dynamic>)).toList();
+    }
     _loaded = true;
   }
 
   List<NotificationModel> getAllNotifications() {
-    _seed();
     final sorted = List<NotificationModel>.from(_cache)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return sorted;
@@ -63,21 +29,43 @@ class NotificationService {
   }
 
   Future<void> markAsRead(String id) async {
-    final idx = _cache.indexWhere((n) => n.id == id);
-    if (idx != -1) {
-      _cache[idx] = _cache[idx].copyWith(isRead: true);
+    final res = await ApiClient.patch('$_resource/$id/read');
+    if (res.statusCode == 200) {
+      final idx = _cache.indexWhere((n) => n.id == id);
+      if (idx != -1) {
+        _cache[idx] = _cache[idx].copyWith(isRead: true);
+      }
     }
   }
 
   Future<void> markAllAsRead() async {
-    for (var i = 0; i < _cache.length; i++) {
-      _cache[i] = _cache[i].copyWith(isRead: true);
+    final res = await ApiClient.patch('$_resource/read-all');
+    if (res.statusCode == 200) {
+      for (var i = 0; i < _cache.length; i++) {
+        _cache[i] = _cache[i].copyWith(isRead: true);
+      }
     }
   }
 
   int get unreadCount => _cache.where((n) => !n.isRead).length;
 
   Future<void> refresh() async {
-    _seed();
+    _loaded = false;
+    await _ensureLoaded();
+  }
+
+  NotificationModel _fromApi(Map<String, dynamic> j) {
+    return NotificationModel(
+      id: j['_id'] as String? ?? j['id'] as String,
+      type: NotificationType.values.firstWhere(
+        (t) => t.name == j['type'],
+        orElse: () => NotificationType.projectUpdate,
+      ),
+      title: j['title'] as String,
+      body: j['body'] as String,
+      projectId: j['projectId'] as String?,
+      isRead: j['isRead'] as bool? ?? false,
+      createdAt: DateTime.tryParse(j['createdAt'] as String? ?? '') ?? DateTime.now(),
+    );
   }
 }

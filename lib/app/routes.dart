@@ -11,8 +11,6 @@ import '../screens/notifications/notifications_screen.dart';
 import '../screens/reports/progress_reports_screen.dart';
 import '../screens/analytics/analytics_screen.dart';
 import '../screens/profile/profile_screen.dart';
-import '../screens/profile/edit_profile_screen.dart';
-import '../models/user_model.dart';
 
 class AppRoutes {
   static const String dashboard = '/';
@@ -26,7 +24,6 @@ class AppRoutes {
   static const String reports = '/reports';
   static const String analytics = '/analytics';
   static const String profile = '/profile';
-  static const String editProfile = '/profile/edit';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     final args = settings.arguments;
@@ -55,16 +52,6 @@ class AppRoutes {
         return _fadeRoute(AnalyticsScreen());
       case profile:
         return _fadeRoute(const ProfileScreen());
-      case editProfile:
-        final user = args is UserModel ? args : UserModel(
-          id: 'u1',
-          name: 'Dra. Elena Vargas',
-          email: 'elena.vargas@universidad.edu',
-          institution: 'Universidad Nacional de Investigación',
-          role: UserRole.principalInvestigator,
-          createdAt: DateTime(2020, 3, 15),
-        );
-        return _fadeRoute(EditProfileScreen(user: user));
       default:
         return _fadeRoute(const DashboardScreen());
     }

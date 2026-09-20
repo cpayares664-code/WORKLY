@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../app/routes.dart';
 import '../../models/project_model.dart';
 import '../../models/task_model.dart';
 import '../../models/notification_model.dart';
@@ -68,13 +67,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return AppScaffold(
       title: 'Panel',
       currentIndex: 0,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.pushNamed(context, AppRoutes.createProject),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        tooltip: 'Crear proyecto',
-        child: const Icon(Icons.add),
-      ),
       body: RefreshIndicator(
         onRefresh: () async {
           setState(() => _loading = true);

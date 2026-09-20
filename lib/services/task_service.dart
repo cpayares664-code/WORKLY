@@ -1,112 +1,42 @@
+import 'dart:convert';
 import '../models/task_model.dart';
+import 'api_client.dart';
 
 class TaskService {
-  static final TaskService _instance = TaskService._internal();
-  factory TaskService() => _instance;
-  TaskService._internal();
+  static const String _resource = '/tasks';
 
-  final List<TaskModel> _cache = [];
+  List<TaskModel> _cache = [];
   bool _loaded = false;
 
-  void _seed() {
+  Future<void> _ensureLoaded() async {
     if (_loaded) return;
-    _cache.addAll([
-      TaskModel(
-        id: 't1',
-        projectId: 'p1',
-        title: 'Recolectar muestras Zona 1',
-        description: 'Recolección de muestras biológicas en la zona 1.',
-        status: TaskStatus.done,
-        priority: TaskPriority.high,
-        assigneeId: 'u1',
-        dueDate: DateTime(2025, 3, 15),
-        subtasks: ['Preparar equipo', 'Transportar muestras', 'Catalogar'],
-        completedSubtasks: 3,
-        createdAt: DateTime(2025, 1, 20),
-      ),
-      TaskModel(
-        id: 't2',
-        projectId: 'p1',
-        title: 'Recolectar muestras Zona 2',
-        description: 'Recolección en la zona 2 del estudio.',
-        status: TaskStatus.inProgress,
-        priority: TaskPriority.high,
-        assigneeId: 'u1',
-        dueDate: DateTime.now().add(const Duration(days: 5)),
-        subtasks: ['Preparar equipo', 'Transportar muestras', 'Catalogar'],
-        completedSubtasks: 1,
-        createdAt: DateTime(2025, 2, 1),
-      ),
-      TaskModel(
-        id: 't3',
-        projectId: 'p1',
-        title: 'Análisis preliminar de datos',
-        description: 'Primer análisis estadístico de los datos recolectados.',
-        status: TaskStatus.todo,
-        priority: TaskPriority.medium,
-        assigneeId: 'u2',
-        dueDate: DateTime.now().add(const Duration(days: 12)),
-        subtasks: [],
-        completedSubtasks: 0,
-        createdAt: DateTime(2025, 2, 15),
-      ),
-      TaskModel(
-        id: 't4',
-        projectId: 'p2',
-        title: 'Revisión bibliográfica',
-        description: 'Revisión de literatura sobre nanomateriales solares.',
-        status: TaskStatus.inProgress,
-        priority: TaskPriority.medium,
-        assigneeId: 'u1',
-        dueDate: DateTime.now().add(const Duration(days: 8)),
-        subtasks: ['Buscar papers', 'Resumir hallazgos'],
-        completedSubtasks: 1,
-        createdAt: DateTime(2025, 5, 25),
-      ),
-      TaskModel(
-        id: 't5',
-        projectId: 'p3',
-        title: 'Encuestas de campo',
-        description: 'Aplicar encuestas en comunidades rurales.',
-        status: TaskStatus.review,
-        priority: TaskPriority.urgent,
-        assigneeId: 'u1',
-        dueDate: DateTime.now().subtract(const Duration(days: 2)),
-        subtasks: ['Diseñar encuesta', 'Piloto', 'Aplicar'],
-        completedSubtasks: 2,
-        createdAt: DateTime(2024, 10, 1),
-      ),
-    ]);
+    final res = await ApiClient.get(_resource);
+    if (res.statusCode == 200) {
+      final list = jsonDecode(res.body) as List;
+      _cache = list.map((j) => _fromApi(j as Map<String, dynamic>)).toList();
+    }
     _loaded = true;
   }
 
-  List<TaskModel> getAllTasks() {
-    _seed();
-    return List.unmodifiable(_cache);
-  }
+  List<TaskModel> getAllTasks() => List.unmodifiable(_cache);
 
   List<TaskModel> getTasksForProject(String projectId) {
-    _seed();
     return _cache.where((t) => t.projectId == projectId).toList();
   }
 
   List<TaskModel> getTasksByStatus(TaskStatus status) {
-    _seed();
     return _cache.where((t) => t.status == status).toList();
   }
 
   List<TaskModel> getTasksByAssignee(String userId) {
-    _seed();
     return _cache.where((t) => t.assigneeId == userId).toList();
   }
 
   List<TaskModel> getOverdueTasks() {
-    _seed();
     return _cache.where((t) => t.isOverdue).toList();
   }
 
   List<TaskModel> getUpcomingTasks({int days = 7}) {
-    _seed();
     final limit = DateTime.now().add(Duration(days: days));
     return _cache.where((t) {
       if (t.dueDate == null || t.status == TaskStatus.done) return false;
@@ -115,36 +45,34 @@ class TaskService {
   }
 
   Future<void> addTask(TaskModel task) async {
-    final newId = 't${DateTime.now().millisecondsSinceEpoch}';
-    final created = TaskModel(
-      id: newId,
-      projectId: task.projectId,
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      priority: task.priority,
-      assigneeId: task.assigneeId,
-      dueDate: task.dueDate,
-      subtasks: task.subtasks,
-      completedSubtasks: task.completedSubtasks,
-      createdAt: DateTime.now(),
-    );
-    _cache.insert(0, created);
+    final res = await ApiClient.post(_resource, body: _toApi(task));
+    if (res.statusCode == 201) {
+      final created = _fromApi(jsonDecode(res.body) as Map<String, dynamic>);
+      _cache.insert(0, created);
+    }
   }
 
   Future<void> updateTask(TaskModel task) async {
-    final idx = _cache.indexWhere((t) => t.id == task.id);
-    if (idx != -1) _cache[idx] = task;
+    final res = await ApiClient.put('$_resource/${task.id}', body: _toApi(task));
+    if (res.statusCode == 200) {
+      final updated = _fromApi(jsonDecode(res.body) as Map<String, dynamic>);
+      final idx = _cache.indexWhere((t) => t.id == task.id);
+      if (idx != -1) _cache[idx] = updated;
+    }
   }
 
   Future<void> updateTaskStatus(String taskId, TaskStatus status) async {
-    final idx = _cache.indexWhere((t) => t.id == taskId);
-    if (idx != -1) {
-      _cache[idx] = _cache[idx].copyWith(status: status);
+    final res = await ApiClient.patch('$_resource/$taskId/status', body: {'status': status.name});
+    if (res.statusCode == 200) {
+      final idx = _cache.indexWhere((t) => t.id == taskId);
+      if (idx != -1) {
+        _cache[idx] = _cache[idx].copyWith(status: status);
+      }
     }
   }
 
   Future<void> deleteTask(String id) async {
+    await ApiClient.delete('$_resource/$id');
     _cache.removeWhere((t) => t.id == id);
   }
 
@@ -161,6 +89,43 @@ class TaskService {
   }
 
   Future<void> refresh() async {
-    _seed();
+    _loaded = false;
+    await _ensureLoaded();
   }
+
+  TaskModel _fromApi(Map<String, dynamic> j) {
+    return TaskModel(
+      id: j['_id'] as String? ?? j['id'] as String,
+      projectId: j['projectId'] as String,
+      title: j['title'] as String,
+      description: j['description'] as String? ?? '',
+      status: TaskStatus.values.firstWhere(
+        (s) => s.name == j['status'],
+        orElse: () => TaskStatus.todo,
+      ),
+      priority: TaskPriority.values.firstWhere(
+        (p) => p.name == j['priority'],
+        orElse: () => TaskPriority.medium,
+      ),
+      assigneeId: j['assigneeId'] as String?,
+      dueDate: j['dueDate'] != null
+          ? DateTime.tryParse(j['dueDate'] as String)
+          : null,
+      subtasks: List<String>.from(j['subtasks'] as List? ?? []),
+      completedSubtasks: j['completedSubtasks'] as int? ?? 0,
+      createdAt: DateTime.tryParse(j['createdAt'] as String? ?? '') ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> _toApi(TaskModel t) => {
+        'projectId': t.projectId,
+        'title': t.title,
+        'description': t.description,
+        'status': t.status.name,
+        'priority': t.priority.name,
+        'assigneeId': t.assigneeId,
+        'dueDate': t.dueDate?.toIso8601String(),
+        'subtasks': t.subtasks,
+        'completedSubtasks': t.completedSubtasks,
+      };
 }

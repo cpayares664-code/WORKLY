@@ -1,99 +1,51 @@
+import 'dart:convert';
 import '../models/document_model.dart';
+import 'api_client.dart';
 
 class DocumentService {
-  static final DocumentService _instance = DocumentService._internal();
-  factory DocumentService() => _instance;
-  DocumentService._internal();
+  static const String _resource = '/documents';
 
-  final List<DocumentModel> _cache = [];
+  List<DocumentModel> _cache = [];
   bool _loaded = false;
 
-  void _seed() {
+  Future<void> _ensureLoaded() async {
     if (_loaded) return;
-    _cache.addAll([
-      DocumentModel(
-        id: 'd1',
-        projectId: 'p1',
-        title: 'Protocolo de Recolección',
-        type: DocumentType.protocol,
-        fileType: 'pdf',
-        sizeKb: 512,
-        uploadedById: 'u1',
-        version: '1.2',
-        tags: ['Protocolo', 'Campo'],
-        createdAt: DateTime(2025, 1, 18),
-        updatedAt: DateTime(2025, 2, 10),
-      ),
-      DocumentModel(
-        id: 'd2',
-        projectId: 'p1',
-        title: 'Datos Zona 1 - Preliminar',
-        type: DocumentType.dataset,
-        fileType: 'csv',
-        sizeKb: 2048,
-        uploadedById: 'u2',
-        version: '1.0',
-        tags: ['Datos', 'Zona 1'],
-        createdAt: DateTime(2025, 3, 1),
-        updatedAt: DateTime(2025, 3, 1),
-      ),
-      DocumentModel(
-        id: 'd3',
-        projectId: 'p2',
-        title: 'Revisión de Literatura - Nanomateriales',
-        type: DocumentType.paper,
-        fileType: 'pdf',
-        sizeKb: 1024,
-        uploadedById: 'u1',
-        version: '1.0',
-        tags: ['Literatura', 'Nanotecnología'],
-        createdAt: DateTime(2025, 5, 26),
-        updatedAt: DateTime(2025, 5, 26),
-      ),
-    ]);
+    final res = await ApiClient.get(_resource);
+    if (res.statusCode == 200) {
+      final list = jsonDecode(res.body) as List;
+      _cache = list.map((j) => _fromApi(j as Map<String, dynamic>)).toList();
+    }
     _loaded = true;
   }
 
-  List<DocumentModel> getAllDocuments() {
-    _seed();
-    return List.unmodifiable(_cache);
-  }
+  List<DocumentModel> getAllDocuments() => List.unmodifiable(_cache);
 
   List<DocumentModel> getDocumentsForProject(String projectId) {
-    _seed();
     return _cache.where((d) => d.projectId == projectId).toList();
   }
 
   List<DocumentModel> getDocumentsByType(DocumentType type) {
-    _seed();
     return _cache.where((d) => d.type == type).toList();
   }
 
   Future<void> addDocument(DocumentModel doc) async {
-    final newId = 'd${DateTime.now().millisecondsSinceEpoch}';
-    final created = DocumentModel(
-      id: newId,
-      projectId: doc.projectId,
-      title: doc.title,
-      type: doc.type,
-      fileUrl: doc.fileUrl,
-      fileType: doc.fileType,
-      sizeKb: doc.sizeKb,
-      uploadedById: doc.uploadedById,
-      version: doc.version,
-      tags: doc.tags,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-    _cache.insert(0, created);
+    final res = await ApiClient.post(_resource, body: _toApi(doc));
+    if (res.statusCode == 201) {
+      final created = _fromApi(jsonDecode(res.body) as Map<String, dynamic>);
+      _cache.insert(0, created);
+    }
   }
 
   Future<void> updateDocument(DocumentModel doc) async {
-    final idx = _cache.indexWhere((d) => d.id == doc.id);
-    if (idx != -1) _cache[idx] = doc;
+    final res = await ApiClient.put('$_resource/${doc.id}', body: _toApi(doc));
+    if (res.statusCode == 200) {
+      final idx = _cache.indexWhere((d) => d.id == doc.id);
+      if (idx != -1) _cache[idx] = doc;
+    }
   }
 
   Future<void> deleteDocument(String id) async {
+    await ApiClient.delete('$_resource/$id');
     _cache.removeWhere((d) => d.id == id);
   }
 
@@ -103,6 +55,39 @@ class DocumentService {
       _cache.fold(0, (sum, d) => sum + d.sizeKb) / 1024;
 
   Future<void> refresh() async {
-    _seed();
+    _loaded = false;
+    await _ensureLoaded();
   }
+
+  DocumentModel _fromApi(Map<String, dynamic> j) {
+    return DocumentModel(
+      id: j['_id'] as String? ?? j['id'] as String,
+      projectId: j['projectId'] as String,
+      title: j['title'] as String,
+      type: DocumentType.values.firstWhere(
+        (t) => t.name == j['type'],
+        orElse: () => DocumentType.other,
+      ),
+      fileUrl: j['fileUrl'] as String?,
+      fileType: j['fileType'] as String? ?? 'pdf',
+      sizeKb: j['sizeKb'] as int? ?? 0,
+      uploadedById: j['uploadedById'] as String? ?? 'u1',
+      version: j['version'] as String?,
+      tags: List<String>.from(j['tags'] as List? ?? []),
+      createdAt: DateTime.tryParse(j['createdAt'] as String? ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(j['updatedAt'] as String? ?? '') ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> _toApi(DocumentModel d) => {
+        'projectId': d.projectId,
+        'title': d.title,
+        'type': d.type.name,
+        'fileUrl': d.fileUrl,
+        'fileType': d.fileType,
+        'sizeKb': d.sizeKb,
+        'uploadedById': d.uploadedById,
+        'version': d.version,
+        'tags': d.tags,
+      };
 }
