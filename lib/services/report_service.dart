@@ -1,84 +1,92 @@
-import 'dart:convert';
 import '../models/report_model.dart';
-import 'api_client.dart';
 
 class ReportService {
-  static const String _resource = '/reports';
+  static final ReportService _instance = ReportService._internal();
+  factory ReportService() => _instance;
+  ReportService._internal();
 
-  List<ReportModel> _cache = [];
+  final List<ReportModel> _cache = [];
   bool _loaded = false;
 
-  Future<void> _ensureLoaded() async {
+  void _seed() {
     if (_loaded) return;
-    final res = await ApiClient.get(_resource);
-    if (res.statusCode == 200) {
-      final list = jsonDecode(res.body) as List;
-      _cache = list.map((j) => _fromApi(j as Map<String, dynamic>)).toList();
-    }
+    _cache.addAll([
+      ReportModel(
+        id: 'r1',
+        projectId: 'p1',
+        title: 'Informe de Avance Q1 2025',
+        summary: 'Se completó la recolección en la Zona 1 y se inició la Zona 2.',
+        authorId: 'u1',
+        authorName: 'Dra. Elena Vargas',
+        progressBefore: 30,
+        progressAfter: 45,
+        highlights: ['Inventario Zona 1 completo', 'Nueva especie identificada'],
+        challenges: ['Condiciones climáticas adversas'],
+        nextSteps: ['Iniciar análisis preliminar', 'Preparar Zona 3'],
+        periodStart: DateTime(2025, 1, 1),
+        periodEnd: DateTime(2025, 3, 31),
+        createdAt: DateTime(2025, 4, 5),
+      ),
+      ReportModel(
+        id: 'r2',
+        projectId: 'p3',
+        title: 'Informe de Campo - Comunidades',
+        summary: 'Se aplicaron encuestas en 5 comunidades rurales.',
+        authorId: 'u1',
+        authorName: 'Dra. Elena Vargas',
+        progressBefore: 50,
+        progressAfter: 60,
+        highlights: ['120 encuestas completadas', 'Alta participación'],
+        challenges: ['Dificultad de acceso a zonas remotas'],
+        nextSteps: ['Análisis de datos', 'Informe final'],
+        periodStart: DateTime(2024, 9, 1),
+        periodEnd: DateTime(2024, 12, 31),
+        createdAt: DateTime(2025, 1, 10),
+      ),
+    ]);
     _loaded = true;
   }
 
   List<ReportModel> getAllReports() {
+    _seed();
     final sorted = List<ReportModel>.from(_cache)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return sorted;
   }
 
   List<ReportModel> getReportsForProject(String projectId) {
+    _seed();
     return _cache.where((r) => r.projectId == projectId).toList();
   }
 
   Future<void> addReport(ReportModel report) async {
-    final res = await ApiClient.post(_resource, body: _toApi(report));
-    if (res.statusCode == 201) {
-      final created = _fromApi(jsonDecode(res.body) as Map<String, dynamic>);
-      _cache.insert(0, created);
-    }
+    final newId = 'r${DateTime.now().millisecondsSinceEpoch}';
+    final created = ReportModel(
+      id: newId,
+      projectId: report.projectId,
+      title: report.title,
+      summary: report.summary,
+      authorId: report.authorId,
+      authorName: report.authorName,
+      progressBefore: report.progressBefore,
+      progressAfter: report.progressAfter,
+      highlights: report.highlights,
+      challenges: report.challenges,
+      nextSteps: report.nextSteps,
+      periodStart: report.periodStart,
+      periodEnd: report.periodEnd,
+      createdAt: DateTime.now(),
+    );
+    _cache.insert(0, created);
   }
 
   Future<void> deleteReport(String id) async {
-    await ApiClient.delete('$_resource/$id');
     _cache.removeWhere((r) => r.id == id);
   }
 
   int get totalReports => _cache.length;
 
   Future<void> refresh() async {
-    _loaded = false;
-    await _ensureLoaded();
+    _seed();
   }
-
-  ReportModel _fromApi(Map<String, dynamic> j) {
-    return ReportModel(
-      id: j['_id'] as String? ?? j['id'] as String,
-      projectId: j['projectId'] as String,
-      title: j['title'] as String,
-      summary: j['summary'] as String? ?? '',
-      authorId: j['authorId'] as String? ?? 'u1',
-      authorName: j['authorName'] as String? ?? '',
-      progressBefore: j['progressBefore'] as int? ?? 0,
-      progressAfter: j['progressAfter'] as int? ?? 0,
-      highlights: List<String>.from(j['highlights'] as List? ?? []),
-      challenges: List<String>.from(j['challenges'] as List? ?? []),
-      nextSteps: List<String>.from(j['nextSteps'] as List? ?? []),
-      periodStart: DateTime.tryParse(j['periodStart'] as String? ?? '') ?? DateTime.now(),
-      periodEnd: DateTime.tryParse(j['periodEnd'] as String? ?? '') ?? DateTime.now(),
-      createdAt: DateTime.tryParse(j['createdAt'] as String? ?? '') ?? DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> _toApi(ReportModel r) => {
-        'projectId': r.projectId,
-        'title': r.title,
-        'summary': r.summary,
-        'authorId': r.authorId,
-        'authorName': r.authorName,
-        'progressBefore': r.progressBefore,
-        'progressAfter': r.progressAfter,
-        'highlights': r.highlights,
-        'challenges': r.challenges,
-        'nextSteps': r.nextSteps,
-        'periodStart': r.periodStart.toIso8601String(),
-        'periodEnd': r.periodEnd.toIso8601String(),
-      };
 }

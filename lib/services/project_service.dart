@@ -1,36 +1,105 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import '../models/project_model.dart';
 import '../models/objective_model.dart';
-import 'api_client.dart';
 
 class ProjectService {
-  static const String _resource = '/projects';
+  static final ProjectService _instance = ProjectService._internal();
+  factory ProjectService() => _instance;
+  ProjectService._internal();
 
-  List<ProjectModel> _cache = [];
+  final List<ProjectModel> _cache = [];
+  final List<ObjectiveModel> _objectivesCache = [];
   bool _loaded = false;
 
-  Future<List<ProjectModel>> _ensureLoaded() async {
-    if (_loaded) return _cache;
-    await _fetchAll();
-    return _cache;
+  void _seed() {
+    if (_loaded) return;
+    _cache.addAll([
+      ProjectModel(
+        id: 'p1',
+        title: 'Estudio de Biodiversidad en los Andes',
+        description: 'Análisis de la diversidad de especies en ecosistemas de alta montaña.',
+        area: 'Ecología',
+        status: ProjectStatus.active,
+        leadId: 'u1',
+        memberIds: ['u1', 'u2', 'u3'],
+        startDate: DateTime(2025, 1, 15),
+        endDate: DateTime(2026, 12, 31),
+        budget: 75000,
+        spent: 32000,
+        progress: 45,
+        tags: ['Clima', 'Biodiversidad', 'Andes'],
+        createdAt: DateTime(2025, 1, 10),
+      ),
+      ProjectModel(
+        id: 'p2',
+        title: 'Nanomateriales para Energía Renovable',
+        description: 'Desarrollo de nuevos nanomateriales para celdas solares de alta eficiencia.',
+        area: 'Nanotecnología',
+        status: ProjectStatus.planning,
+        leadId: 'u1',
+        memberIds: ['u1', 'u4'],
+        startDate: DateTime(2025, 6, 1),
+        endDate: DateTime(2027, 6, 1),
+        budget: 120000,
+        spent: 5000,
+        progress: 10,
+        tags: ['Energía', 'Nanotecnología'],
+        createdAt: DateTime(2025, 5, 20),
+      ),
+      ProjectModel(
+        id: 'p3',
+        title: 'Salud Pública y Cambio Climático',
+        description: 'Impacto del cambio climático en la salud de comunidades rurales.',
+        area: 'Salud Pública',
+        status: ProjectStatus.onHold,
+        leadId: 'u2',
+        memberIds: ['u1', 'u2', 'u5'],
+        startDate: DateTime(2024, 9, 1),
+        endDate: DateTime(2026, 3, 1),
+        budget: 50000,
+        spent: 28000,
+        progress: 60,
+        tags: ['Salud', 'Clima', 'Rural'],
+        createdAt: DateTime(2024, 8, 15),
+      ),
+    ]);
+
+    _objectivesCache.addAll([
+      ObjectiveModel(
+        id: 'o1',
+        projectId: 'p1',
+        title: 'Inventario de especies',
+        description: 'Completar el inventario de especies en 3 zonas de estudio.',
+        status: ObjectiveStatus.inProgress,
+        weight: 1.0,
+        targetDate: DateTime(2025, 12, 31),
+        milestones: ['Zona 1', 'Zona 2', 'Zona 3'],
+        completedMilestones: 2,
+        createdAt: DateTime(2025, 1, 15),
+      ),
+      ObjectiveModel(
+        id: 'o2',
+        projectId: 'p1',
+        title: 'Análisis estadístico',
+        description: 'Análisis de datos de biodiversidad.',
+        status: ObjectiveStatus.notStarted,
+        weight: 0.8,
+        targetDate: DateTime(2026, 6, 30),
+        milestones: ['Recopilación', 'Procesamiento', 'Reporte'],
+        completedMilestones: 0,
+        createdAt: DateTime(2025, 1, 15),
+      ),
+    ]);
+
+    _loaded = true;
   }
 
-  Future<void> _fetchAll() async {
-    final res = await ApiClient.get(_resource);
-    if (res.statusCode == 200) {
-      final list = jsonDecode(res.body) as List;
-      _cache = list.map((j) => _fromApi(j as Map<String, dynamic>)).toList();
-      _loaded = true;
-    } else {
-      _cache = [];
-      _loaded = true;
-    }
+  List<ProjectModel> getAllProjects() {
+    _seed();
+    return List.unmodifiable(_cache);
   }
-
-  List<ProjectModel> getAllProjects() => List.unmodifiable(_cache);
 
   ProjectModel? getProjectById(String id) {
+    _seed();
     try {
       return _cache.firstWhere((p) => p.id == id);
     } catch (_) {
@@ -39,34 +108,42 @@ class ProjectService {
   }
 
   List<ObjectiveModel> getObjectivesForProject(String projectId) {
+    _seed();
     return _objectivesCache.where((o) => o.projectId == projectId).toList();
   }
 
-  final List<ObjectiveModel> _objectivesCache = [];
-
   List<ProjectModel> getProjectsByStatus(ProjectStatus status) {
+    _seed();
     return _cache.where((p) => p.status == status).toList();
   }
 
   Future<void> addProject(ProjectModel project) async {
-    final res = await ApiClient.post(_resource, body: _toApi(project));
-    if (res.statusCode == 201) {
-      final created = _fromApi(jsonDecode(res.body) as Map<String, dynamic>);
-      _cache.insert(0, created);
-    }
+    final newId = 'p${DateTime.now().millisecondsSinceEpoch}';
+    final created = ProjectModel(
+      id: newId,
+      title: project.title,
+      description: project.description,
+      area: project.area,
+      status: project.status,
+      leadId: project.leadId,
+      memberIds: project.memberIds,
+      startDate: project.startDate,
+      endDate: project.endDate,
+      budget: project.budget,
+      spent: project.spent,
+      progress: project.progress,
+      tags: project.tags,
+      createdAt: DateTime.now(),
+    );
+    _cache.insert(0, created);
   }
 
   Future<void> updateProject(ProjectModel project) async {
-    final res = await ApiClient.put('$_resource/${project.id}', body: _toApi(project));
-    if (res.statusCode == 200) {
-      final updated = _fromApi(jsonDecode(res.body) as Map<String, dynamic>);
-      final idx = _cache.indexWhere((p) => p.id == project.id);
-      if (idx != -1) _cache[idx] = updated;
-    }
+    final idx = _cache.indexWhere((p) => p.id == project.id);
+    if (idx != -1) _cache[idx] = project;
   }
 
   Future<void> deleteProject(String id) async {
-    await ApiClient.delete('$_resource/$id');
     _cache.removeWhere((p) => p.id == id);
     _objectivesCache.removeWhere((o) => o.projectId == id);
   }
@@ -88,46 +165,6 @@ class ProjectService {
   }
 
   Future<void> refresh() async {
-    _loaded = false;
-    await _fetchAll();
+    _seed();
   }
-
-  ProjectModel _fromApi(Map<String, dynamic> j) {
-    return ProjectModel(
-      id: j['_id'] as String? ?? j['id'] as String,
-      title: j['title'] as String,
-      description: j['description'] as String? ?? '',
-      area: j['area'] as String?,
-      status: ProjectStatus.values.firstWhere(
-        (s) => s.name == j['status'],
-        orElse: () => ProjectStatus.planning,
-      ),
-      leadId: j['leadId'] as String? ?? 'u1',
-      memberIds: List<String>.from(j['memberIds'] as List? ?? []),
-      startDate: DateTime.tryParse(j['startDate'] as String? ?? '') ?? DateTime.now(),
-      endDate: j['endDate'] != null
-          ? DateTime.tryParse(j['endDate'] as String)
-          : null,
-      budget: (j['budget'] as num?)?.toDouble() ?? 0,
-      spent: (j['spent'] as num?)?.toDouble() ?? 0,
-      progress: j['progress'] as int? ?? 0,
-      tags: List<String>.from(j['tags'] as List? ?? []),
-      createdAt: DateTime.tryParse(j['createdAt'] as String? ?? '') ?? DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> _toApi(ProjectModel p) => {
-        'title': p.title,
-        'description': p.description,
-        'area': p.area,
-        'status': p.status.name,
-        'leadId': p.leadId,
-        'memberIds': p.memberIds,
-        'startDate': p.startDate.toIso8601String(),
-        'endDate': p.endDate?.toIso8601String(),
-        'budget': p.budget,
-        'spent': p.spent,
-        'progress': p.progress,
-        'tags': p.tags,
-      };
 }
