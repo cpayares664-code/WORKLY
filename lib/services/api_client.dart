@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
@@ -23,7 +24,7 @@ class ApiClient {
     return _client.post(
       Uri.parse('$baseUrl$path'),
       headers: _headers,
-      body: body != null ? _encode(body) : null,
+      body: body != null ? jsonEncode(body) : null,
     );
   }
 
@@ -31,7 +32,7 @@ class ApiClient {
     return _client.put(
       Uri.parse('$baseUrl$path'),
       headers: _headers,
-      body: body != null ? _encode(body) : null,
+      body: body != null ? jsonEncode(body) : null,
     );
   }
 
@@ -39,7 +40,7 @@ class ApiClient {
     return _client.patch(
       Uri.parse('$baseUrl$path'),
       headers: _headers,
-      body: body != null ? _encode(body) : null,
+      body: body != null ? jsonEncode(body) : null,
     );
   }
 
@@ -48,39 +49,6 @@ class ApiClient {
       Uri.parse('$baseUrl$path'),
       headers: _headers,
     );
-  }
-
-  static String _encode(Map<String, dynamic> body) {
-    return _jsonEncode(body);
-  }
-
-  static String _jsonEncode(Map<dynamic, dynamic> body) {
-    return body.keys.map((k) {
-      final v = body[k];
-      if (v == null) return '"$k":null';
-      if (v is String) return '"$k":"${_escape(v)}"';
-      if (v is num || v is bool) return '"$k":$v';
-      if (v is List) {
-        final items = v.map((e) {
-          if (e is String) return '"${_escape(e)}"';
-          if (e is num || e is bool) return '$e';
-          if (e is Map) return _jsonEncode(e);
-          return 'null';
-        }).join(',');
-        return '"$k":[$items]';
-      }
-      if (v is Map) return '"$k":${_jsonEncode(v)}';
-      return '"$k":null';
-    }).join(',');
-  }
-
-  static String _escape(String s) {
-    return s
-        .replaceAll('\\', '\\\\')
-        .replaceAll('"', '\\"')
-        .replaceAll('\n', '\\n')
-        .replaceAll('\r', '\\r')
-        .replaceAll('\t', '\\t');
   }
 }
 
